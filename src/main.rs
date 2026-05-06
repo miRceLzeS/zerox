@@ -35,11 +35,19 @@ fn run_prompt() -> Result<()> {
         print!("> ");
         std::io::stdout().flush()?;
 
-        std::io::stdin().read_line(&mut input)?;
+        let n = std::io::stdin().read_line(&mut input)?;
+        if n == 0 {
+            println!("");
+            break;
+        }
 
-        interpret(&input)?;
+        if let Err(err) = interpret(&input) {
+            println!("{}", err);
+        }
         input.clear();
     }
+
+    Ok(())
 }
 
 fn run_file(file_name: &str) -> Result<()> {
@@ -48,7 +56,7 @@ fn run_file(file_name: &str) -> Result<()> {
 }
 
 fn interpret(source_code: &str) -> Result<()> {
-    println!("{source_code}");
+    println!("{}", source_code);
 
     Ok(())
 }
