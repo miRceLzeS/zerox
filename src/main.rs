@@ -1,9 +1,6 @@
 use std::{io::Write, process::ExitCode};
 
-use zerox::{
-    Result,
-    error::{Error, ErrorKind},
-};
+use zerox::{Error, Result};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -23,9 +20,7 @@ fn run(args: &Vec<String>) -> Result<()> {
 
         1 => run_file(&args[0]),
 
-        _ => Err(Error::new(ErrorKind::CLIErrorr(
-            "Usage: zerox [file]".into(),
-        ))),
+        _ => Err(Error::CLIErrorr(format!("Usage: zerox [file]"))),
     }
 }
 
@@ -56,7 +51,9 @@ fn run_file(file_name: &str) -> Result<()> {
 }
 
 fn interpret(source_code: &str) -> Result<()> {
-    println!("{}", source_code);
+    let mut l = zerox::Lexer::new(source_code);
+    let tokens = l.lex().unwrap();
+    println!("{:?}", tokens);
 
     Ok(())
 }

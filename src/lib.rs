@@ -1,4 +1,7 @@
 pub mod error;
+pub mod lex;
 
-pub type Result<T> = std::result::Result<T, error::Error>;
+pub use error::Error;
+pub use lex::Lexer;
 
+pub type Result<T> = std::result::Result<T, Error>;
