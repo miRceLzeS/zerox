@@ -33,3 +33,9 @@ impl std::fmt::Display for Error {
         write!(f, "zerox: {}\n", self.0)
     }
 }
+
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        Self(ErrorKind::IOError(value.into()))
+    }
+}
