@@ -215,7 +215,7 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn match_string(&mut self, start: &mut usize) -> Option<Token> {
+    fn match_string(&mut self, start: &usize) -> Option<Token> {
         // when to break the while
         // 1. self.peek(0) -> None => at end
         // 2. ss == " => not at end
@@ -240,7 +240,7 @@ impl<'s> Lexer<'s> {
         s.chars().all(|ch| ch.is_ascii_digit())
     }
 
-    fn match_number(&mut self, start: &mut usize) -> Option<Token> {
+    fn match_number(&mut self, start: &usize) -> Option<Token> {
         let consume_digits = |l: &mut Self| {
             while let Some(ss) = l.peek(0)
                 && l.is_digit(ss)
@@ -271,7 +271,7 @@ impl<'s> Lexer<'s> {
         s.chars().all(|ch| ch.is_ascii_alphabetic() || ch == '_')
     }
 
-    fn match_identifier(&mut self, start: &mut usize) -> Token {
+    fn match_identifier(&mut self, start: &usize) -> Token {
         while let Some(ss) = self.peek(0)
             && (self.is_alpha(ss) || self.is_digit(ss))
         {
