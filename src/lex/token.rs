@@ -18,10 +18,10 @@ pub enum TokenKind {
     EEQUAL,
     BANG,
     BEQUAL,
-    GREATER,
-    GEQUAL,
-    LESS,
-    LEQUAL,
+    RANGLE,
+    RANGLEEQUAL,
+    LANGLE,
+    LANGLEEQUAL,
 
     // keywords
     TRUE,
@@ -52,20 +52,19 @@ pub enum TokenKind {
     COMMENT,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Token {
     pub kind: TokenKind,
     pub span: super::Span,
+    pub line: usize,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, span: (usize, usize)) -> Token {
+    pub fn new(kind: TokenKind, span: (usize, usize), line: usize) -> Token {
         Token {
             kind,
-            span: super::Span {
-                start: span.0,
-                end: span.1,
-            },
+            span: super::Span::new(span.0, span.1),
+            line: line,
         }
     }
 }

@@ -1,10 +1,9 @@
-pub mod span;
 pub mod token;
 
 use std::{collections::HashMap, sync::LazyLock};
 
-pub use crate::Error;
-pub use span::Span;
+pub use crate::Span;
+pub use crate::{Error, Result};
 pub use token::{Token, TokenKind};
 
 pub type Tokens = Vec<Token>;
@@ -46,116 +45,155 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    pub fn lex(&mut self) -> crate::Result<Tokens> {
+    pub fn lex(&mut self) -> Result<Tokens> {
         self.current = 0;
         self.line = 1;
 
         let mut start: usize;
         let mut tokens = vec![];
 
-        while !self.is_end() {
-            start = self.current;
+        while let Some(ss) = self.advance() {
+            start = self.current - 1;
 
-            if let Some(ss) = self.advance() {
-                match ss {
-                    " " | "\r" | "\t" => {}
+            match ss {
+                " " | "\r" | "\t" => {}
 
-                    "\n" => {
-                        self.line += 1;
-                    }
+                "\n" => {
+                    self.line += 1;
+                }
 
-                    "(" => tokens.push(Token::new(TokenKind::LPAREN, (start, self.current))),
+                "(" => tokens.push(Token::new(
+                    TokenKind::LPAREN,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    ")" => tokens.push(Token::new(TokenKind::RPAREN, (start, self.current))),
+                ")" => tokens.push(Token::new(
+                    TokenKind::RPAREN,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    "{" => tokens.push(Token::new(TokenKind::LBRACE, (start, self.current))),
+                "{" => tokens.push(Token::new(
+                    TokenKind::LBRACE,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    "}" => tokens.push(Token::new(TokenKind::RBRACE, (start, self.current))),
+                "}" => tokens.push(Token::new(
+                    TokenKind::RBRACE,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    "," => tokens.push(Token::new(TokenKind::COMMA, (start, self.current))),
+                "," => tokens.push(Token::new(
+                    TokenKind::COMMA,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    "." => tokens.push(Token::new(TokenKind::DOT, (start, self.current))),
+                "." => tokens.push(Token::new(TokenKind::DOT, (start, self.current), self.line)),
 
-                    ";" => tokens.push(Token::new(TokenKind::SEMICOLON, (start, self.current))),
+                ";" => tokens.push(Token::new(
+                    TokenKind::SEMICOLON,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    "+" => tokens.push(Token::new(TokenKind::PLUS, (start, self.current))),
+                "+" => tokens.push(Token::new(
+                    TokenKind::PLUS,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    "-" => tokens.push(Token::new(TokenKind::MINUS, (start, self.current))),
+                "-" => tokens.push(Token::new(
+                    TokenKind::MINUS,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    "*" => tokens.push(Token::new(TokenKind::STAR, (start, self.current))),
+                "*" => tokens.push(Token::new(
+                    TokenKind::STAR,
+                    (start, self.current),
+                    self.line,
+                )),
 
-                    "/" => {
-                        tokens.push(Token::new(
-                            self.either(TokenKind::COMMENT, TokenKind::SLASH),
-                            (start, self.current),
-                        ));
-                    }
+                "/" => {
+                    tokens.push(Token::new(
+                        self.either(TokenKind::COMMENT, TokenKind::SLASH),
+                        (start, self.current),
+                        self.line,
+                    ));
+                }
 
-                    "=" => {
-                        tokens.push(Token::new(
-                            self.either(TokenKind::EEQUAL, TokenKind::EQUAL),
-                            (start, self.current),
-                        ));
-                    }
+                "=" => {
+                    tokens.push(Token::new(
+                        self.either(TokenKind::EEQUAL, TokenKind::EQUAL),
+                        (start, self.current),
+                        self.line,
+                    ));
+                }
 
-                    "!" => {
-                        tokens.push(Token::new(
-                            self.either(TokenKind::BEQUAL, TokenKind::BANG),
-                            (start, self.current),
-                        ));
-                    }
+                "!" => {
+                    tokens.push(Token::new(
+                        self.either(TokenKind::BEQUAL, TokenKind::BANG),
+                        (start, self.current),
+                        self.line,
+                    ));
+                }
 
-                    ">" => {
-                        tokens.push(Token::new(
-                            self.either(TokenKind::GEQUAL, TokenKind::GREATER),
-                            (start, self.current),
-                        ));
-                    }
+                ">" => {
+                    tokens.push(Token::new(
+                        self.either(TokenKind::RANGLEEQUAL, TokenKind::RANGLE),
+                        (start, self.current),
+                        self.line,
+                    ));
+                }
 
-                    "<" => {
-                        tokens.push(Token::new(
-                            self.either(TokenKind::LEQUAL, TokenKind::LESS),
-                            (start, self.current),
-                        ));
-                    }
+                "<" => {
+                    tokens.push(Token::new(
+                        self.either(TokenKind::LANGLEEQUAL, TokenKind::LANGLE),
+                        (start, self.current),
+                        self.line,
+                    ));
+                }
 
-                    // literal
-                    _ => {
-                        if ss == "\"" {
-                            match self.match_string(&mut start) {
-                                Some(tok) => tokens.push(tok),
-                                None => {
-                                    return Err(Error::LexError(format!("unclosing quotes")));
-                                }
+                // literal
+                _ => {
+                    if ss == "\"" {
+                        match self.match_string(&mut start) {
+                            Some(tok) => tokens.push(tok),
+                            None => {
+                                return Err(Error::LexError(format!("unclosing quotes")));
                             }
-                        } else if self.is_digit(ss) {
-                            match self.match_number(&mut start) {
-                                Some(tok) => tokens.push(tok),
-                                None => {
-                                    return Err(Error::LexError(format!("empty number fraction")));
-                                }
-                            }
-                        } else if self.is_alpha(ss) {
-                            tokens.push(self.match_identifier(&mut start));
-                        } else {
-                            return Err(Error::LexError(format!(
-                                "{}:{}: unknown character",
-                                self.line, start
-                            )));
                         }
+                    } else if self.is_digit(ss) {
+                        match self.match_number(&mut start) {
+                            Some(tok) => tokens.push(tok),
+                            None => {
+                                return Err(Error::LexError(format!("empty number fraction")));
+                            }
+                        }
+                    } else if self.is_alpha(ss) {
+                        tokens.push(self.match_identifier(&mut start));
+                    } else {
+                        return Err(Error::LexError(format!(
+                            "{}:{}: unknown character",
+                            self.line, start
+                        )));
                     }
                 }
             }
         }
 
         // self.current == self.source.chars().count()
-        tokens.push(Token::new(TokenKind::EOF, (self.current, self.current)));
+        tokens.push(Token::new(
+            TokenKind::EOF,
+            (self.current, self.current),
+            self.line,
+        ));
 
         Ok(tokens)
-    }
-
-    fn is_end(&self) -> bool {
-        self.current >= self.source.chars().count()
     }
 
     fn advance(&mut self) -> Option<&'s str> {
@@ -180,7 +218,7 @@ impl<'s> Lexer<'s> {
 
     fn either(&mut self, long: TokenKind, short: TokenKind) -> TokenKind {
         match short {
-            TokenKind::EQUAL | TokenKind::BANG | TokenKind::GREATER | TokenKind::LESS => {
+            TokenKind::EQUAL | TokenKind::BANG | TokenKind::RANGLE | TokenKind::LANGLE => {
                 if let Some(ss) = self.peek(0)
                     && ss == "="
                 {
@@ -200,7 +238,6 @@ impl<'s> Lexer<'s> {
 
                     while let Some(comment) = self.peek(0)
                         && comment != "\n"
-                        && !self.is_end()
                     {
                         self.advance();
                     }
@@ -228,12 +265,17 @@ impl<'s> Lexer<'s> {
             self.advance();
         }
 
-        if self.is_end() {
-            return None;
-        }
-
-        self.advance(); // consume the closing '"'
-        return Some(Token::new(TokenKind::STRING, (*start, self.current)));
+        return match self.peek(0) {
+            Some(_) => {
+                self.advance();
+                Some(Token::new(
+                    TokenKind::STRING,
+                    (*start, self.current),
+                    self.line,
+                ))
+            }
+            None => None,
+        };
     }
 
     fn is_digit(&self, s: &str) -> bool {
@@ -264,7 +306,11 @@ impl<'s> Lexer<'s> {
             consume_digits(self);
         }
 
-        Some(Token::new(TokenKind::NUMBER, (*start, self.current)))
+        Some(Token::new(
+            TokenKind::NUMBER,
+            (*start, self.current),
+            self.line,
+        ))
     }
 
     fn is_alpha(&self, s: &str) -> bool {
@@ -280,10 +326,10 @@ impl<'s> Lexer<'s> {
 
         let ss = &self.source[*start..self.current];
         if let Some(&kind) = KEYWORDS.get(ss) {
-            return Token::new(kind.clone(), (*start, self.current));
+            return Token::new(kind.clone(), (*start, self.current), self.line);
         }
 
-        Token::new(TokenKind::IDENTIFIER, (*start, self.current))
+        Token::new(TokenKind::IDENTIFIER, (*start, self.current), self.line)
     }
 }
 

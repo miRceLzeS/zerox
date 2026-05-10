@@ -52,8 +52,11 @@ fn run_file(file_name: &str) -> Result<()> {
 
 fn interpret(source_code: &str) -> Result<()> {
     let mut l = zerox::Lexer::new(source_code);
-    let tokens = l.lex().unwrap();
-    println!("{:?}", tokens);
+    let tokens = l.lex()?;
+
+    let mut p = zerox::Parser::new(tokens);
+    let expr = p.parse()?;
+    println!("{:#?}", expr);
 
     Ok(())
 }
