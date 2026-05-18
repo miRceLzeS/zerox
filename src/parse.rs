@@ -25,6 +25,11 @@ impl Parser {
         Err(Error::ParseError(format!("line {}: unknown syntax", line)))
     }
 
+    pub fn state(&self) -> Option<(usize, Token)> {
+        let tok = self.peek()?;
+        Some((self.current, tok))
+    }
+
     fn parse_expression(&mut self) -> Option<Expr> {
         self.parse_equality()
     }
@@ -205,7 +210,7 @@ impl Parser {
         Some(*tok)
     }
 
-    fn peek(&mut self) -> Option<Token> {
+    fn peek(&self) -> Option<Token> {
         let tok = self.tokens.get(self.current)?;
         Some(*tok)
     }

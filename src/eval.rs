@@ -32,7 +32,7 @@ impl Neg for EvalResult {
             return Ok(EvalResult::Number(-f));
         }
 
-        Err(Error::EvalError(format!("fail to apply operation '-'")))
+        Err(Error::EvalError(format!("Operand must be boolean.")))
     }
 }
 
@@ -72,7 +72,9 @@ impl Add for EvalResult {
             return Ok(EvalResult::String(format!("{}{}", s1, s2)));
         }
 
-        Err(Error::EvalError(format!("unsupport operation '+'")))
+        Err(Error::EvalError(format!(
+            "Operands must be number or string."
+        )))
     }
 }
 
@@ -86,7 +88,7 @@ impl Sub for EvalResult {
             return Ok(EvalResult::Number(f1 - f2));
         }
 
-        Err(Error::EvalError(format!("unsupport operation '-'")))
+        Err(Error::EvalError(format!("Operands must be number.")))
     }
 }
 
@@ -100,7 +102,7 @@ impl Mul for EvalResult {
             return Ok(EvalResult::Number(f1 * f2));
         }
 
-        Err(Error::EvalError(format!("unsupport operation '*'")))
+        Err(Error::EvalError(format!("Operands must be number.")))
     }
 }
 
@@ -111,11 +113,13 @@ impl Div for EvalResult {
         if let EvalResult::Number(f1) = self
             && let EvalResult::Number(f2) = rhs
         {
-            // [TODO] f2 == 0
+            if f2 == 0.0 {
+                return Err(Error::EvalError(format!("Can not divide by 0.")));
+            }
             return Ok(EvalResult::Number(f1 / f2));
         }
 
-        Err(Error::EvalError(format!("unsupport operation '/'")))
+        Err(Error::EvalError(format!("Operands must be number.")))
     }
 }
 
@@ -168,4 +172,3 @@ impl PartialOrd for EvalResult {
 pub trait Evaluator {
     fn eval(&self, source: &str) -> crate::Result<EvalResult>;
 }
-

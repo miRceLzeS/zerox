@@ -137,7 +137,7 @@ impl crate::Evaluator for Expr {
 
                     BinaryOperator::Equal => {
                         if l_val.partial_cmp(&r_val).is_none() {
-                            return Err(Error::EvalError(format!("uncomparable")));
+                            return Err(Error::EvalError(format!("Uncomparable.")));
                         }
 
                         Ok(EvalResult::Bool(l_val == r_val))
@@ -145,7 +145,7 @@ impl crate::Evaluator for Expr {
 
                     BinaryOperator::NotEqual => {
                         if l_val.partial_cmp(&r_val).is_none() {
-                            return Err(Error::EvalError(format!("uncomparable")));
+                            return Err(Error::EvalError(format!("Uncomparable.")));
                         }
 
                         Ok(EvalResult::Bool(!(l_val == r_val)))
@@ -153,7 +153,7 @@ impl crate::Evaluator for Expr {
 
                     BinaryOperator::Less => {
                         if l_val.partial_cmp(&r_val).is_none() {
-                            return Err(Error::EvalError(format!("uncomparable")));
+                            return Err(Error::EvalError(format!("Uncomparable.")));
                         }
 
                         Ok(EvalResult::Bool(l_val < r_val))
@@ -161,7 +161,7 @@ impl crate::Evaluator for Expr {
 
                     BinaryOperator::LessEqual => {
                         if l_val.partial_cmp(&r_val).is_none() {
-                            return Err(Error::EvalError(format!("uncomparable")));
+                            return Err(Error::EvalError(format!("Uncomparable.")));
                         }
 
                         Ok(EvalResult::Bool(l_val <= r_val))
@@ -169,7 +169,7 @@ impl crate::Evaluator for Expr {
 
                     BinaryOperator::Greater => {
                         if l_val.partial_cmp(&r_val).is_none() {
-                            return Err(Error::EvalError(format!("uncomparable")));
+                            return Err(Error::EvalError(format!("Uncomparable.")));
                         }
 
                         Ok(EvalResult::Bool(l_val > r_val))
@@ -177,7 +177,7 @@ impl crate::Evaluator for Expr {
 
                     BinaryOperator::GreaterEqual => {
                         if l_val.partial_cmp(&r_val).is_none() {
-                            return Err(Error::EvalError(format!("uncomparable")));
+                            return Err(Error::EvalError(format!("Uncomparable.")));
                         }
 
                         Ok(EvalResult::Bool(l_val >= r_val))

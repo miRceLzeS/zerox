@@ -56,7 +56,19 @@ fn interpret(source_code: &str) -> Result<()> {
 
     let mut p = zerox::Parser::new(tokens);
     let expr = p.parse()?;
-    println!("{}", expr.eval(source_code)?);
+    match expr.eval(source_code) {
+        Ok(val) => println!("{}", val),
+        Err(err) => {
+            let (_, tok) = p.state().unwrap();
+            println!(
+                "{}:{}:{}: {}",
+                tok.line - 1,
+                tok.span.start - 1,
+                tok.span.end - 1,
+                err
+            );
+        }
+    }
 
     Ok(())
 }
