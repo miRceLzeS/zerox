@@ -196,17 +196,6 @@ impl<'s> Lexer<'s> {
         Ok(tokens)
     }
 
-    fn advance(&mut self) -> Option<&'s str> {
-        let mut it = self.source.char_indices();
-
-        let (start, _) = it.nth(self.current)?;
-        let end = it.next().map(|(i, _)| i).unwrap_or(self.source.len());
-
-        self.current += 1;
-
-        Some(&self.source[start..end])
-    }
-
     fn peek(&self, num: usize) -> Option<&'s str> {
         let mut it = self.source.char_indices();
 
@@ -214,6 +203,13 @@ impl<'s> Lexer<'s> {
         let end = it.next().map(|(i, _)| i).unwrap_or(self.source.len());
 
         Some(&self.source[start..end])
+    }
+
+    fn advance(&mut self) -> Option<&'s str> {
+        let res = self.peek(0)?;
+        self.current += 1;
+
+        Some(res)
     }
 
     fn either(&mut self, long: TokenKind, short: TokenKind) -> TokenKind {

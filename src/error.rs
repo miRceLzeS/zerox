@@ -4,6 +4,7 @@ pub enum Error {
     CLIErrorr(String),
     LexError(String),
     ParseError(String),
+    EvalError(String),
     CogegenError(String),
 }
 
@@ -14,6 +15,7 @@ impl std::fmt::Display for Error {
             Error::CLIErrorr(msg) => write!(f, "cli error\n{}", msg),
             Error::LexError(msg) => write!(f, "lex error\n{}", msg),
             Error::ParseError(msg) => write!(f, "parse error\n{}", msg),
+            Error::EvalError(msg) => write!(f, "eval error\n{}", msg),
             Error::CogegenError(msg) => write!(f, "code gen error\n{}", msg),
         }
     }

@@ -1,6 +1,6 @@
 use std::{io::Write, process::ExitCode};
 
-use zerox::{Error, Result};
+use zerox::{Error, Evaluator, Result};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -56,7 +56,7 @@ fn interpret(source_code: &str) -> Result<()> {
 
     let mut p = zerox::Parser::new(tokens);
     let expr = p.parse()?;
-    println!("{:#?}", expr);
+    println!("{}", expr.eval(source_code)?);
 
     Ok(())
 }
