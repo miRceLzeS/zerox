@@ -85,4 +85,9 @@ pub enum Expr {
     Variable {
         ident: Span,
     },
+
+    Assign {
+        ident: Span,
+        expr: Box<Expr>,
+    },
 }

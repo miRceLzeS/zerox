@@ -44,7 +44,27 @@ impl Parser {
     }
 
     fn parse_expression(&mut self) -> Option<Expr> {
-        self.parse_equality()
+        self.parse_assignment()
+    }
+
+    fn parse_assignment(&mut self) -> Option<Expr> {
+        let exp = self.parse_equality()?;
+
+        let next = self.peek()?;
+        if next.kind == TokenKind::EQUAL {
+            self.advance();
+
+            let assign_expr = self.parse_assignment()?;
+            return match exp {
+                Expr::Variable { ident } => Some(Expr::Assign {
+                    ident,
+                    expr: Box::new(assign_expr),
+                }),
+                _ => None,
+            };
+        }
+
+        Some(exp)
     }
 
     fn parse_equality(&mut self) -> Option<Expr> {
@@ -282,11 +302,6 @@ impl Parser {
             TokenKind::SEMICOLON => Some(Stmt::PrintStmt(expr)),
             _ => Some(Stmt::Unknown(format!("expect ';' after expression"))),
         }
-
-        // match self.advance()?.kind {
-        //     TokenKind::SEMICOLON => Some(Stmt::PrintStmt(expr)),
-        //     _ => Some(Stmt::Unknown(format!("expect ';' after expression"))),
-        // }
     }
 
     fn parse_expression_stmt(&mut self) -> Option<Stmt> {

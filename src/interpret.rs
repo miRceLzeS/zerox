@@ -226,14 +226,14 @@ impl<'i> Interpreter<'i> {
                     println!("{}", val);
                 }
 
-                _ => unreachable!(),
+                _ => return Err(Error::RuntimeError(format!("Unknown syntax."))),
             }
         }
 
         Ok(())
     }
 
-    fn eval(&self, source: &str, expr: Expr) -> crate::Result<EvalResult> {
+    fn eval(&mut self, source: &'i str, expr: Expr) -> crate::Result<EvalResult> {
         match expr {
             Expr::Literal { value } => match value {
                 LiteralValue::Number(tok_span) => {
@@ -338,6 +338,19 @@ impl<'i> Interpreter<'i> {
                 let name = ident.lexeme(source);
                 match self.env.vars.get(name) {
                     Some(val) => Ok(val.clone()),
+                    None => Err(Error::RuntimeError(format!("Undefined variable {}.", name))),
+                }
+            }
+
+            Expr::Assign { ident, expr } => {
+                let name = ident.lexeme(source);
+                let new_val = self.eval(source, *expr)?;
+
+                match self.env.vars.get(name) {
+                    Some(_) => {
+                        self.env.vars.insert(name, new_val);
+                        Ok(EvalResult::Nil)
+                    }
                     None => Err(Error::RuntimeError(format!("Undefined variable {}.", name))),
                 }
             }
