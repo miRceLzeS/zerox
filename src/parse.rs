@@ -4,6 +4,7 @@ pub mod stmt;
 pub use crate::lex::{Token, TokenKind, Tokens};
 pub use crate::{Error, Result};
 pub use expr::{BinaryOperator, Expr, LiteralValue, UnaryOperator};
+pub use stmt::Stmt;
 
 #[derive(Debug)]
 pub struct Parser {
@@ -16,13 +17,25 @@ impl Parser {
         Self { current: 0, tokens }
     }
 
-    pub fn parse(&mut self) -> Result<Expr> {
-        if let Some(expr) = self.parse_expression() {
-            return Ok(expr);
+    pub fn parse(&mut self) -> Result<crate::Program> {
+        let mut prog = vec![];
+
+        let n = self.tokens.len();
+        loop {
+            if self.current + 1 >= n {
+                break;
+            }
+
+            match self.parse_decl() {
+                Some(valid_stmt) => match valid_stmt {
+                    Stmt::Unknown(msg) => return Err(Error::ParseError(msg)),
+                    _ => prog.push(valid_stmt),
+                },
+                None => return Err(Error::ParseError(format!("Unknown syntax"))),
+            }
         }
 
-        let line = self.peek().unwrap().line;
-        Err(Error::ParseError(format!("line {}: unknown syntax", line)))
+        Ok(prog)
     }
 
     pub fn state(&self) -> Option<(usize, Token)> {
@@ -200,7 +213,87 @@ impl Parser {
                 }
             }
 
+            TokenKind::IDENTIFIER => {
+                self.advance();
+                Some(Expr::Variable { ident: tok.span })
+            }
+
             _ => None,
+        }
+    }
+
+    fn parse_decl(&mut self) -> Option<Stmt> {
+        let tok = self.peek()?;
+        if tok.kind == TokenKind::VAR {
+            self.advance();
+            return self.parse_var_decl();
+        }
+
+        self.parse_stmt()
+    }
+
+    fn parse_var_decl(&mut self) -> Option<Stmt> {
+        let tok = self.peek()?;
+        if tok.kind != TokenKind::IDENTIFIER {
+            return Some(Stmt::Unknown(format!("expect identifier after 'var'")));
+        }
+
+        self.advance();
+
+        let mut stat = Stmt::VarDeclStmt {
+            ident: tok.span,
+            init_expr: None,
+        };
+
+        match self.peek()?.kind {
+            TokenKind::EQUAL => {
+                self.advance();
+                let init_expr = self.parse_expression()?;
+                stat = Stmt::VarDeclStmt {
+                    ident: tok.span,
+                    init_expr: Some(init_expr),
+                };
+            }
+            _ => {}
+        }
+
+        match self.advance()?.kind {
+            TokenKind::SEMICOLON => Some(stat),
+            _ => Some(Stmt::Unknown(format!(
+                "expect ';' for varieble declaration"
+            ))),
+        }
+    }
+
+    fn parse_stmt(&mut self) -> Option<Stmt> {
+        let tok = self.peek()?;
+        if tok.kind == TokenKind::PRINT {
+            self.advance();
+            return self.parse_print_stmt();
+        }
+
+        self.parse_expression_stmt()
+    }
+
+    fn parse_print_stmt(&mut self) -> Option<Stmt> {
+        let expr = self.parse_expression()?;
+        let tok = self.advance()?;
+        match tok.kind {
+            TokenKind::SEMICOLON => Some(Stmt::PrintStmt(expr)),
+            _ => Some(Stmt::Unknown(format!("expect ';' after expression"))),
+        }
+
+        // match self.advance()?.kind {
+        //     TokenKind::SEMICOLON => Some(Stmt::PrintStmt(expr)),
+        //     _ => Some(Stmt::Unknown(format!("expect ';' after expression"))),
+        // }
+    }
+
+    fn parse_expression_stmt(&mut self) -> Option<Stmt> {
+        let expr = self.parse_expression()?;
+        match self.advance()?.kind {
+            TokenKind::SEMICOLON => Some(Stmt::ExprStmt(expr)),
+            _ => Some(Stmt::Unknown(format!("expect ';' after expression"))),
         }
     }
 
