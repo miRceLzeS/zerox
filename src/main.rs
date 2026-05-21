@@ -27,7 +27,7 @@ fn run(args: &Vec<String>) -> Result<()> {
 fn run_prompt() -> Result<()> {
     let mut input = String::new();
     loop {
-        print!("> ");
+        print!("\n> ");
         std::io::stdout().flush()?;
 
         let n = std::io::stdin().read_line(&mut input)?;

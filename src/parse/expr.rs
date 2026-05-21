@@ -39,6 +39,8 @@ pub enum BinaryOperator {
     LessEqual,
     Greater,
     GreaterEqual,
+    Or,
+    And,
 }
 
 impl TryFrom<super::TokenKind> for BinaryOperator {

@@ -12,6 +12,11 @@ pub enum Stmt {
     },
     ExprStmt(Expr),
     PrintStmt(Expr),
+    IfStmt {
+        cond: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
 
     Unknown(String),
 }

@@ -17,6 +17,20 @@ pub enum EvalResult {
     Nil,
 }
 
+impl EvalResult {
+    pub fn as_bool(&self) -> EvalResult {
+        if matches!(self, EvalResult::Nil) {
+            return EvalResult::Bool(false);
+        }
+
+        if let EvalResult::Bool(b) = self {
+            return EvalResult::Bool(*b);
+        }
+
+        EvalResult::Bool(true)
+    }
+}
+
 impl Display for EvalResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -44,19 +58,27 @@ impl Not for EvalResult {
     type Output = Result<EvalResult>;
 
     fn not(self) -> Self::Output {
-        if matches!(self, EvalResult::Nil) {
-            // null => false (only in bool exprission)
-            // !null => true
-            return Ok(EvalResult::Bool(true));
+        if let EvalResult::Bool(b) = self.as_bool() {
+            return Ok(EvalResult::Bool(!b));
         }
 
-        if let EvalResult::Bool(b) = self {
-            Ok(EvalResult::Bool(!b))
-        } else {
-            // x is neither null nor bool => true
-            // !x => false
-            Ok(EvalResult::Bool(false))
-        }
+        Err(Error::RuntimeError(format!(
+            "Operand can not be evaluated to boolean"
+        )))
+
+        // if matches!(self, EvalResult::Nil) {
+        //     // null => false (only in bool exprission)
+        //     // !null => true
+        //     return Ok(EvalResult::Bool(true));
+        // }
+
+        // if let EvalResult::Bool(b) = self {
+        //     Ok(EvalResult::Bool(!b))
+        // } else {
+        //     // x is neither null nor bool => true
+        //     // !x => false
+        //     Ok(EvalResult::Bool(false))
+        // }
     }
 }
 
@@ -235,7 +257,23 @@ impl<'i> Interpreter<'i> {
 
                 Stmt::PrintStmt(expr) => {
                     let val = self.eval(source, expr)?;
-                    println!("{}", val);
+                    print!("{}", val);
+                }
+
+                Stmt::IfStmt {
+                    cond,
+                    then_branch,
+                    else_branch,
+                } => {
+                    if let EvalResult::Bool(b) = self.eval(source, cond)?.as_bool() {
+                        if b {
+                            let then_prog = vec![*then_branch];
+                            self.interpret(source, then_prog)?;
+                        } else if let Some(else_stmt) = else_branch {
+                            let else_prog = vec![*else_stmt];
+                            self.interpret(source, else_prog)?;
+                        }
+                    }
                 }
 
                 Stmt::Unknown(msg) => return Err(Error::RuntimeError(format!("{}", msg))),
@@ -285,18 +323,31 @@ impl<'i> Interpreter<'i> {
 
             Expr::Binary { left, op, right } => {
                 let l_val = self.eval(source, *left)?;
-                let r_val = self.eval(source, *right)?;
+                // let r_val = self.eval(source, *right)?;
 
                 match op {
-                    BinaryOperator::Add => l_val + r_val,
+                    BinaryOperator::Add => {
+                        let r_val = self.eval(source, *right)?;
+                        l_val + r_val
+                    }
 
-                    BinaryOperator::Minus => l_val - r_val,
+                    BinaryOperator::Minus => {
+                        let r_val = self.eval(source, *right)?;
+                        l_val - r_val
+                    }
 
-                    BinaryOperator::Multiply => l_val * r_val,
+                    BinaryOperator::Multiply => {
+                        let r_val = self.eval(source, *right)?;
+                        l_val * r_val
+                    }
 
-                    BinaryOperator::Divide => l_val / r_val,
+                    BinaryOperator::Divide => {
+                        let r_val = self.eval(source, *right)?;
+                        l_val / r_val
+                    }
 
                     BinaryOperator::Equal => {
+                        let r_val = self.eval(source, *right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -305,6 +356,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::NotEqual => {
+                        let r_val = self.eval(source, *right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -313,6 +365,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::Less => {
+                        let r_val = self.eval(source, *right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -321,6 +374,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::LessEqual => {
+                        let r_val = self.eval(source, *right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -329,6 +383,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::Greater => {
+                        let r_val = self.eval(source, *right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -337,12 +392,61 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::GreaterEqual => {
+                        let r_val = self.eval(source, *right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
 
                         Ok(EvalResult::Bool(l_val >= r_val))
                     }
+
+                    BinaryOperator::Or => match l_val.as_bool() {
+                        EvalResult::Bool(b1) => {
+                            if b1 {
+                                return Ok(l_val);
+                            }
+
+                            // let r_val = self.eval(source, *right)?;
+                            // if let EvalResult::Bool(b2) = r_val.as_bool() {
+                            //     return Ok(EvalResult::Bool(b1 || b2));
+                            // } else {
+                            //     return Err(Error::RuntimeError(format!(
+                            //         "Unevaluable right expression of 'or'"
+                            //     )));
+                            // }
+
+                            self.eval(source, *right)
+                        }
+                        _ => {
+                            return Err(Error::RuntimeError(format!(
+                                "Unevaluable left expression of 'or'"
+                            )));
+                        }
+                    },
+
+                    BinaryOperator::And => match l_val.as_bool() {
+                        EvalResult::Bool(b1) => {
+                            if !b1 {
+                                return Ok(l_val);
+                            }
+
+                            // let r_val = self.eval(source, *right)?;
+                            // if let EvalResult::Bool(b2) = r_val.as_bool() {
+                            //     return Ok(EvalResult::Bool(b1 && b2));
+                            // } else {
+                            //     return Err(Error::RuntimeError(format!(
+                            //         "Unevaluable right expression of 'and'"
+                            //     )));
+                            // }
+
+                            self.eval(source, *right)
+                        }
+                        _ => {
+                            return Err(Error::RuntimeError(format!(
+                                "Unevaluable left expression of 'and'"
+                            )));
+                        }
+                    },
                 }
             }
 

@@ -48,7 +48,7 @@ impl Parser {
     }
 
     fn parse_assignment(&mut self) -> Option<Expr> {
-        let exp = self.parse_equality()?;
+        let exp = self.parse_logic_or()?;
 
         let next = self.peek()?;
         if next.kind == TokenKind::EQUAL {
@@ -65,6 +65,52 @@ impl Parser {
         }
 
         Some(exp)
+    }
+
+    fn parse_logic_or(&mut self) -> Option<Expr> {
+        let mut expr = self.parse_logic_and()?;
+
+        loop {
+            let tok = self.peek()?;
+            if tok.kind == TokenKind::OR {
+                self.advance();
+
+                let frag = self.parse_logic_and()?;
+
+                expr = Expr::Binary {
+                    left: Box::new(expr),
+                    op: BinaryOperator::Or,
+                    right: Box::new(frag),
+                };
+            } else {
+                break;
+            }
+        }
+
+        Some(expr)
+    }
+
+    fn parse_logic_and(&mut self) -> Option<Expr> {
+        let mut expr = self.parse_equality()?;
+
+        loop {
+            let tok = self.peek()?;
+            if tok.kind == TokenKind::AND {
+                self.advance()?;
+
+                let frag = self.parse_equality()?;
+
+                expr = Expr::Binary {
+                    left: Box::new(expr),
+                    op: BinaryOperator::And,
+                    right: Box::new(frag),
+                };
+            } else {
+                break;
+            }
+        }
+
+        Some(expr)
     }
 
     fn parse_equality(&mut self) -> Option<Expr> {
@@ -292,10 +338,17 @@ impl Parser {
                 self.advance();
                 return self.parse_print_stmt();
             }
+
             TokenKind::LBRACE => {
                 self.advance();
                 return self.parse_block();
             }
+
+            TokenKind::IF => {
+                self.advance();
+                return self.parse_if_stmt();
+            }
+
             _ => {}
         }
 
@@ -329,6 +382,43 @@ impl Parser {
             TokenKind::SEMICOLON => Some(Stmt::ExprStmt(expr)),
             _ => Some(Stmt::Unknown(format!("expect ';' after expression"))),
         }
+    }
+
+    fn parse_if_stmt(&mut self) -> Option<Stmt> {
+        if self.advance()?.kind != TokenKind::LPAREN {
+            return Some(Stmt::Unknown(format!("expect '(' after 'if'")));
+        }
+
+        let cond = self.parse_expression()?;
+
+        if self.advance()?.kind != TokenKind::RPAREN {
+            return Some(Stmt::Unknown(format!(
+                "expect ')' for closing if condition  expression"
+            )));
+        }
+
+        let then_stmt = self.parse_stmt()?;
+        let mut if_stmt = Stmt::IfStmt {
+            cond,
+            then_branch: Box::new(then_stmt),
+            else_branch: None,
+        };
+
+        let tok = self.peek()?;
+        if tok.kind == TokenKind::ELSE {
+            self.advance()?;
+            let else_stmt = self.parse_stmt()?;
+            if let Stmt::IfStmt {
+                cond: _,
+                then_branch: _,
+                else_branch,
+            } = &mut if_stmt
+            {
+                *else_branch = Some(Box::new(else_stmt));
+            }
+        }
+
+        Some(if_stmt)
     }
 
     fn advance(&mut self) -> Option<Token> {
