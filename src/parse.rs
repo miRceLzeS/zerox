@@ -31,7 +31,7 @@ impl Parser {
                     Stmt::Unknown(msg) => return Err(Error::ParseError(msg)),
                     _ => prog.push(valid_stmt),
                 },
-                None => return Err(Error::ParseError(format!("Unknown syntax"))),
+                None => return Err(Error::ParseError(format!("Unknown syntax."))),
             }
         }
 
@@ -287,9 +287,16 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> Option<Stmt> {
         let tok = self.peek()?;
-        if tok.kind == TokenKind::PRINT {
-            self.advance();
-            return self.parse_print_stmt();
+        match tok.kind {
+            TokenKind::PRINT => {
+                self.advance();
+                return self.parse_print_stmt();
+            }
+            TokenKind::LBRACE => {
+                self.advance();
+                return self.parse_block();
+            }
+            _ => {}
         }
 
         self.parse_expression_stmt()
@@ -302,6 +309,18 @@ impl Parser {
             TokenKind::SEMICOLON => Some(Stmt::PrintStmt(expr)),
             _ => Some(Stmt::Unknown(format!("expect ';' after expression"))),
         }
+    }
+
+    fn parse_block(&mut self) -> Option<Stmt> {
+        let mut stmts: Vec<Stmt> = vec![];
+        while let Some(decl) = self.parse_decl() {
+            stmts.push(decl);
+        }
+
+        return match self.advance()?.kind {
+            TokenKind::RBRACE => Some(Stmt::BlockStmt { stmts }),
+            _ => Some(Stmt::Unknown(format!("expect '}}' after block"))),
+        };
     }
 
     fn parse_expression_stmt(&mut self) -> Option<Stmt> {

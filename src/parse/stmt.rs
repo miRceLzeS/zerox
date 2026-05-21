@@ -7,6 +7,9 @@ pub enum Stmt {
         ident: Span,
         init_expr: Option<Expr>,
     },
+    BlockStmt {
+        stmts: Vec<Stmt>,
+    },
     ExprStmt(Expr),
     PrintStmt(Expr),
 

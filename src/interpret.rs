@@ -4,7 +4,7 @@ use crate::{
 };
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, LinkedList},
     fmt::Display,
     ops::{Add, Div, Mul, Neg, Not, Sub},
 };
@@ -191,12 +191,14 @@ impl<'i> Env<'i> {
 
 #[derive(Debug)]
 pub struct Interpreter<'i> {
-    env: Env<'i>,
+    env: LinkedList<Env<'i>>,
 }
 
 impl<'i> Interpreter<'i> {
     pub fn new() -> Self {
-        Self { env: Env::new() }
+        let mut env = LinkedList::new();
+        env.push_front(Env::new());
+        Self { env }
     }
 
     pub fn interpret(&mut self, source: &'i str, prog: Program) -> crate::Result<()> {
@@ -205,16 +207,26 @@ impl<'i> Interpreter<'i> {
                 Stmt::VarDeclStmt { ident, init_expr } => {
                     let name = ident.lexeme(source);
                     if name != "" {
-                        self.env.vars.insert(name, EvalResult::Nil);
+                        if let Some(env) = self.env.front_mut() {
+                            env.vars.insert(name, EvalResult::Nil);
+                        }
                     }
 
                     match init_expr {
                         Some(expr) => {
                             let val = self.eval(source, expr)?;
-                            self.env.vars.insert(name, val);
+                            if let Some(env) = self.env.front_mut() {
+                                env.vars.insert(name, val);
+                            }
                         }
                         None => {}
                     }
+                }
+
+                Stmt::BlockStmt { stmts } => {
+                    self.env.push_front(Env::new());
+                    self.interpret(source, stmts)?;
+                    self.env.pop_front();
                 }
 
                 Stmt::ExprStmt(expr) => {
@@ -226,14 +238,14 @@ impl<'i> Interpreter<'i> {
                     println!("{}", val);
                 }
 
-                _ => return Err(Error::RuntimeError(format!("Unknown syntax."))),
+                Stmt::Unknown(msg) => return Err(Error::RuntimeError(format!("{}", msg))),
             }
         }
 
         Ok(())
     }
 
-    fn eval(&mut self, source: &'i str, expr: Expr) -> crate::Result<EvalResult> {
+    pub fn eval(&mut self, source: &'i str, expr: Expr) -> crate::Result<EvalResult> {
         match expr {
             Expr::Literal { value } => match value {
                 LiteralValue::Number(tok_span) => {
@@ -336,23 +348,27 @@ impl<'i> Interpreter<'i> {
 
             Expr::Variable { ident } => {
                 let name = ident.lexeme(source);
-                match self.env.vars.get(name) {
-                    Some(val) => Ok(val.clone()),
-                    None => Err(Error::RuntimeError(format!("Undefined variable {}.", name))),
+                for env in &self.env {
+                    if let Some(val) = env.vars.get(name) {
+                        return Ok(val.clone());
+                    }
                 }
+
+                Err(Error::RuntimeError(format!("Undefined variable {}.", name)))
             }
 
             Expr::Assign { ident, expr } => {
                 let name = ident.lexeme(source);
                 let new_val = self.eval(source, *expr)?;
 
-                match self.env.vars.get(name) {
-                    Some(_) => {
-                        self.env.vars.insert(name, new_val);
-                        Ok(EvalResult::Nil)
+                for env in self.env.iter_mut() {
+                    if let Some(_) = env.vars.get(name) {
+                        env.vars.insert(name, new_val);
+                        return Ok(EvalResult::Nil);
                     }
-                    None => Err(Error::RuntimeError(format!("Undefined variable {}.", name))),
                 }
+
+                Err(Error::RuntimeError(format!("Undefined variable {}.", name)))
             }
         }
     }
