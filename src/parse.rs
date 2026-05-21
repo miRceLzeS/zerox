@@ -336,23 +336,26 @@ impl Parser {
         match tok.kind {
             TokenKind::PRINT => {
                 self.advance();
-                return self.parse_print_stmt();
+                self.parse_print_stmt()
             }
 
             TokenKind::LBRACE => {
                 self.advance();
-                return self.parse_block();
+                self.parse_block()
             }
 
             TokenKind::IF => {
                 self.advance();
-                return self.parse_if_stmt();
+                self.parse_if_stmt()
             }
 
-            _ => {}
-        }
+            TokenKind::WHILE => {
+                self.advance();
+                self.parse_while_stmt()
+            }
 
-        self.parse_expression_stmt()
+            _ => self.parse_expression_stmt(),
+        }
     }
 
     fn parse_print_stmt(&mut self) -> Option<Stmt> {
@@ -393,7 +396,7 @@ impl Parser {
 
         if self.advance()?.kind != TokenKind::RPAREN {
             return Some(Stmt::Unknown(format!(
-                "expect ')' for closing if condition  expression"
+                "expect ')' for closing if condition expression"
             )));
         }
 
@@ -419,6 +422,27 @@ impl Parser {
         }
 
         Some(if_stmt)
+    }
+
+    fn parse_while_stmt(&mut self) -> Option<Stmt> {
+        if self.advance()?.kind != TokenKind::LPAREN {
+            return Some(Stmt::Unknown(format!("expect '(' after 'while'")));
+        }
+
+        let cond = self.parse_expression()?;
+
+        if self.advance()?.kind != TokenKind::RPAREN {
+            return Some(Stmt::Unknown(format!(
+                "expect ')' for closing while condition expression"
+            )));
+        }
+
+        let body = self.parse_stmt()?;
+
+        Some(Stmt::WhileStmt {
+            cond,
+            body: Box::new(body),
+        })
     }
 
     fn advance(&mut self) -> Option<Token> {

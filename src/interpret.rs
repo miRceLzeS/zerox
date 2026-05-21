@@ -236,7 +236,7 @@ impl<'i> Interpreter<'i> {
 
                     match init_expr {
                         Some(expr) => {
-                            let val = self.eval(source, expr)?;
+                            let val = self.eval(source, &expr)?;
                             if let Some(env) = self.env.front_mut() {
                                 env.vars.insert(name, val);
                             }
@@ -252,11 +252,11 @@ impl<'i> Interpreter<'i> {
                 }
 
                 Stmt::ExprStmt(expr) => {
-                    self.eval(source, expr)?;
+                    self.eval(source, &expr)?;
                 }
 
                 Stmt::PrintStmt(expr) => {
-                    let val = self.eval(source, expr)?;
+                    let val = self.eval(source, &expr)?;
                     print!("{}", val);
                 }
 
@@ -265,7 +265,7 @@ impl<'i> Interpreter<'i> {
                     then_branch,
                     else_branch,
                 } => {
-                    if let EvalResult::Bool(b) = self.eval(source, cond)?.as_bool() {
+                    if let EvalResult::Bool(b) = self.eval(source, &cond)?.as_bool() {
                         if b {
                             let then_prog = vec![*then_branch];
                             self.interpret(source, then_prog)?;
@@ -276,6 +276,15 @@ impl<'i> Interpreter<'i> {
                     }
                 }
 
+                Stmt::WhileStmt { cond, body } => {
+                    while let EvalResult::Bool(b) = self.eval(source, &cond)?.as_bool()
+                        && b
+                    {
+                        let body_prog = vec![*(body.clone())];
+                        self.interpret(source, body_prog)?;
+                    }
+                }
+
                 Stmt::Unknown(msg) => return Err(Error::RuntimeError(format!("{}", msg))),
             }
         }
@@ -283,7 +292,7 @@ impl<'i> Interpreter<'i> {
         Ok(())
     }
 
-    pub fn eval(&mut self, source: &'i str, expr: Expr) -> crate::Result<EvalResult> {
+    pub fn eval(&mut self, source: &'i str, expr: &Expr) -> crate::Result<EvalResult> {
         match expr {
             Expr::Literal { value } => match value {
                 LiteralValue::Number(tok_span) => {
@@ -308,46 +317,46 @@ impl<'i> Interpreter<'i> {
                 LiteralValue::Nil => Ok(EvalResult::Nil),
             },
 
-            Expr::Group { inner } => self.eval(source, *inner),
+            Expr::Group { inner } => self.eval(source, inner),
 
             Expr::Unary { op, expr } => match op {
                 UnaryOperator::Negative => {
-                    let val = self.eval(source, *expr)?;
+                    let val = self.eval(source, expr)?;
                     -val
                 }
                 UnaryOperator::Not => {
-                    let val = self.eval(source, *expr)?;
+                    let val = self.eval(source, expr)?;
                     !val
                 }
             },
 
             Expr::Binary { left, op, right } => {
-                let l_val = self.eval(source, *left)?;
+                let l_val = self.eval(source, left)?;
                 // let r_val = self.eval(source, *right)?;
 
                 match op {
                     BinaryOperator::Add => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         l_val + r_val
                     }
 
                     BinaryOperator::Minus => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         l_val - r_val
                     }
 
                     BinaryOperator::Multiply => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         l_val * r_val
                     }
 
                     BinaryOperator::Divide => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         l_val / r_val
                     }
 
                     BinaryOperator::Equal => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -356,7 +365,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::NotEqual => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -365,7 +374,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::Less => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -374,7 +383,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::LessEqual => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -383,7 +392,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::Greater => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -392,7 +401,7 @@ impl<'i> Interpreter<'i> {
                     }
 
                     BinaryOperator::GreaterEqual => {
-                        let r_val = self.eval(source, *right)?;
+                        let r_val = self.eval(source, right)?;
                         if l_val.partial_cmp(&r_val).is_none() {
                             return Err(Error::RuntimeError(format!("Uncomparable.")));
                         }
@@ -415,7 +424,7 @@ impl<'i> Interpreter<'i> {
                             //     )));
                             // }
 
-                            self.eval(source, *right)
+                            self.eval(source, right)
                         }
                         _ => {
                             return Err(Error::RuntimeError(format!(
@@ -439,7 +448,7 @@ impl<'i> Interpreter<'i> {
                             //     )));
                             // }
 
-                            self.eval(source, *right)
+                            self.eval(source, right)
                         }
                         _ => {
                             return Err(Error::RuntimeError(format!(
@@ -463,7 +472,7 @@ impl<'i> Interpreter<'i> {
 
             Expr::Assign { ident, expr } => {
                 let name = ident.lexeme(source);
-                let new_val = self.eval(source, *expr)?;
+                let new_val = self.eval(source, expr)?;
 
                 for env in self.env.iter_mut() {
                     if let Some(_) = env.vars.get(name) {

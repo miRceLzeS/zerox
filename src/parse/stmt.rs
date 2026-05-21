@@ -1,7 +1,7 @@
 use super::Expr;
 use crate::Span;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
     VarDeclStmt {
         ident: Span,
@@ -16,6 +16,10 @@ pub enum Stmt {
         cond: Expr,
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
+    },
+    WhileStmt {
+        cond: Expr,
+        body: Box<Stmt>,
     },
 
     Unknown(String),

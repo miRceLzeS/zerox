@@ -1,6 +1,6 @@
 use crate::Span;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum LiteralValue {
     Number(Span),
     String(Span),
@@ -9,7 +9,7 @@ pub enum LiteralValue {
     Nil,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum UnaryOperator {
     Negative,
     Not,
@@ -27,7 +27,7 @@ impl TryFrom<super::TokenKind> for UnaryOperator {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum BinaryOperator {
     Add,
     Minus,
@@ -63,7 +63,7 @@ impl TryFrom<super::TokenKind> for BinaryOperator {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Literal {
         value: LiteralValue,
