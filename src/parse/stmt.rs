@@ -7,16 +7,21 @@ pub enum Stmt {
         ident: Span,
         init_expr: Option<Expr>,
     },
+
     BlockStmt {
         stmts: Vec<Stmt>,
     },
+
     ExprStmt(Expr),
+
     PrintStmt(Expr),
+
     IfStmt {
         cond: Expr,
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
+
     WhileStmt {
         cond: Expr,
         body: Box<Stmt>,

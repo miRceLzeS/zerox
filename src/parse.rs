@@ -354,6 +354,11 @@ impl Parser {
                 self.parse_while_stmt()
             }
 
+            TokenKind::FOR => {
+                self.advance();
+                self.parse_for_stmt()
+            }
+
             _ => self.parse_expression_stmt(),
         }
     }
@@ -443,6 +448,93 @@ impl Parser {
             cond,
             body: Box::new(body),
         })
+    }
+
+    // desugared using while statement
+    fn parse_for_stmt(&mut self) -> Option<Stmt> {
+        if self.advance()?.kind != TokenKind::LPAREN {
+            return Some(Stmt::Unknown(format!("expect '(' after 'for'")));
+        }
+
+        let mut init: Option<Stmt> = None;
+        let tok = self.peek()?;
+        match tok.kind {
+            TokenKind::SEMICOLON => {
+                self.advance();
+            }
+
+            TokenKind::VAR => {
+                self.advance();
+                init = self.parse_var_decl();
+            }
+
+            _ => {
+                init = self.parse_expression_stmt();
+            }
+        }
+
+        let mut cond: Option<Expr> = None;
+        let tok = self.peek()?;
+        match tok.kind {
+            TokenKind::SEMICOLON => {
+                self.advance();
+            }
+
+            _ => {
+                cond = self.parse_expression();
+
+                if self.advance()?.kind != TokenKind::SEMICOLON {
+                    return Some(Stmt::Unknown(format!(
+                        "expect ';' to end condtition expression in 'for' clauses"
+                    )));
+                }
+            }
+        }
+
+        let mut incr: Option<Expr> = None;
+        let tok = self.peek()?;
+        match tok.kind {
+            TokenKind::RPAREN => {
+                self.advance();
+            }
+
+            _ => {
+                incr = self.parse_expression();
+
+                if self.advance()?.kind != TokenKind::RPAREN {
+                    return Some(Stmt::Unknown(format!("expect ')' to close 'for' clauses")));
+                }
+            }
+        }
+
+        let mut body = self.parse_stmt()?;
+        if let Some(incr_stmt) = incr {
+            body = Stmt::BlockStmt {
+                stmts: vec![body, Stmt::ExprStmt(incr_stmt)],
+            };
+        }
+
+        if let Some(cond_expr) = cond {
+            body = Stmt::WhileStmt {
+                cond: cond_expr,
+                body: Box::new(body),
+            };
+        } else {
+            body = Stmt::WhileStmt {
+                cond: Expr::Literal {
+                    value: LiteralValue::True,
+                },
+                body: Box::new(body),
+            };
+        }
+
+        if let Some(init_stmt) = init {
+            body = Stmt::BlockStmt {
+                stmts: vec![init_stmt, body],
+            };
+        }
+
+        Some(body)
     }
 
     fn advance(&mut self) -> Option<Token> {

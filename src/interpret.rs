@@ -415,15 +415,6 @@ impl<'i> Interpreter<'i> {
                                 return Ok(l_val);
                             }
 
-                            // let r_val = self.eval(source, *right)?;
-                            // if let EvalResult::Bool(b2) = r_val.as_bool() {
-                            //     return Ok(EvalResult::Bool(b1 || b2));
-                            // } else {
-                            //     return Err(Error::RuntimeError(format!(
-                            //         "Unevaluable right expression of 'or'"
-                            //     )));
-                            // }
-
                             self.eval(source, right)
                         }
                         _ => {
@@ -438,15 +429,6 @@ impl<'i> Interpreter<'i> {
                             if !b1 {
                                 return Ok(l_val);
                             }
-
-                            // let r_val = self.eval(source, *right)?;
-                            // if let EvalResult::Bool(b2) = r_val.as_bool() {
-                            //     return Ok(EvalResult::Bool(b1 && b2));
-                            // } else {
-                            //     return Err(Error::RuntimeError(format!(
-                            //         "Unevaluable right expression of 'and'"
-                            //     )));
-                            // }
 
                             self.eval(source, right)
                         }
