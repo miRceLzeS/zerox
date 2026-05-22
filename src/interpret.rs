@@ -4,7 +4,7 @@ use crate::{
 };
 use std::{
     cmp::Ordering,
-    collections::{HashMap, LinkedList},
+    collections::HashMap,
     fmt::Display,
     ops::{Add, Div, Mul, Neg, Not, Sub},
 };
@@ -65,20 +65,6 @@ impl Not for EvalResult {
         Err(Error::RuntimeError(format!(
             "Operand can not be evaluated to boolean"
         )))
-
-        // if matches!(self, EvalResult::Nil) {
-        //     // null => false (only in bool exprission)
-        //     // !null => true
-        //     return Ok(EvalResult::Bool(true));
-        // }
-
-        // if let EvalResult::Bool(b) = self {
-        //     Ok(EvalResult::Bool(!b))
-        // } else {
-        //     // x is neither null nor bool => true
-        //     // !x => false
-        //     Ok(EvalResult::Bool(false))
-        // }
     }
 }
 
@@ -213,13 +199,13 @@ impl<'i> Env<'i> {
 
 #[derive(Debug)]
 pub struct Interpreter<'i> {
-    env: LinkedList<Env<'i>>,
+    env: Vec<Env<'i>>,
 }
 
 impl<'i> Interpreter<'i> {
     pub fn new() -> Self {
-        let mut env = LinkedList::new();
-        env.push_front(Env::new());
+        let mut env = Vec::new();
+        env.push(Env::new());
         Self { env }
     }
 
@@ -229,7 +215,7 @@ impl<'i> Interpreter<'i> {
                 Stmt::VarDeclStmt { ident, init_expr } => {
                     let name = ident.lexeme(source);
                     if name != "" {
-                        if let Some(env) = self.env.front_mut() {
+                        if let Some(env) = self.env.last_mut() {
                             env.vars.insert(name, EvalResult::Nil);
                         }
                     }
@@ -237,7 +223,7 @@ impl<'i> Interpreter<'i> {
                     match init_expr {
                         Some(expr) => {
                             let val = self.eval(source, &expr)?;
-                            if let Some(env) = self.env.front_mut() {
+                            if let Some(env) = self.env.last_mut() {
                                 env.vars.insert(name, val);
                             }
                         }
@@ -246,9 +232,9 @@ impl<'i> Interpreter<'i> {
                 }
 
                 Stmt::BlockStmt { stmts } => {
-                    self.env.push_front(Env::new());
+                    self.env.push(Env::new());
                     self.interpret(source, stmts)?;
-                    self.env.pop_front();
+                    self.env.pop();
                 }
 
                 Stmt::ExprStmt(expr) => {
@@ -332,7 +318,6 @@ impl<'i> Interpreter<'i> {
 
             Expr::Binary { left, op, right } => {
                 let l_val = self.eval(source, left)?;
-                // let r_val = self.eval(source, *right)?;
 
                 match op {
                     BinaryOperator::Add => {
@@ -443,7 +428,7 @@ impl<'i> Interpreter<'i> {
 
             Expr::Variable { ident } => {
                 let name = ident.lexeme(source);
-                for env in &self.env {
+                for env in self.env.iter().rev() {
                     if let Some(val) = env.vars.get(name) {
                         return Ok(val.clone());
                     }
