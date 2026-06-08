@@ -1,6 +1,7 @@
 pub mod expr;
 pub mod stmt;
 
+use crate::Span;
 pub use crate::lex::{Token, TokenKind, Tokens};
 pub use crate::{Error, Result};
 pub use expr::{BinaryOperator, Expr, LiteralValue, UnaryOperator};
@@ -17,7 +18,7 @@ impl Parser {
         Self { current: 0, tokens }
     }
 
-    pub fn parse(&mut self) -> Result<crate::Program> {
+    pub fn parse(&mut self) -> Result<Vec<Stmt>> {
         let mut prog = vec![];
 
         let n = self.tokens.len();
@@ -225,8 +226,43 @@ impl Parser {
                 expr: Box::new(expr),
             });
         } else {
-            self.parse_primary()
+            self.parse_call()
         }
+    }
+
+    fn parse_call(&mut self) -> Option<Expr> {
+        let expr = self.parse_primary()?;
+
+        if self.peek()?.kind == TokenKind::LPAREN {
+            self.advance();
+
+            let mut args: Vec<Expr> = vec![];
+            if let Some(first_arg) = self.parse_expression() {
+                args.push(first_arg);
+            }
+
+            loop {
+                let tok = self.peek()?;
+                match tok.kind {
+                    TokenKind::RPAREN => {
+                        self.advance();
+                        return Some(Expr::Call {
+                            callee: Box::new(expr),
+                            args,
+                        });
+                    }
+
+                    TokenKind::COMMA => {
+                        self.advance();
+                        args.push(self.parse_expression()?);
+                    }
+
+                    _ => return None,
+                };
+            }
+        }
+
+        Some(expr)
     }
 
     fn parse_primary(&mut self) -> Option<Expr> {
@@ -290,9 +326,18 @@ impl Parser {
 
     fn parse_decl(&mut self) -> Option<Stmt> {
         let tok = self.peek()?;
-        if tok.kind == TokenKind::VAR {
-            self.advance();
-            return self.parse_var_decl();
+        match tok.kind {
+            TokenKind::VAR => {
+                self.advance();
+                return self.parse_var_decl();
+            }
+
+            TokenKind::FUN => {
+                self.advance();
+                return self.parse_fun_decl();
+            }
+
+            _ => {}
         }
 
         self.parse_stmt()
@@ -329,6 +374,61 @@ impl Parser {
                 "expect ';' for varieble declaration"
             ))),
         }
+    }
+
+    fn parse_fun_decl(&mut self) -> Option<Stmt> {
+        let tok = self.peek()?;
+        if tok.kind != TokenKind::IDENTIFIER {
+            return Some(Stmt::Unknown(format!("expect identifier after 'fun'")));
+        }
+
+        self.advance();
+
+        if self.advance()?.kind != TokenKind::LPAREN {
+            return Some(Stmt::Unknown(format!("expect '(' after identifier")));
+        }
+
+        let mut params: Vec<Span> = vec![];
+        if self.peek()?.kind == TokenKind::IDENTIFIER {
+            let first_param = self.advance()?;
+            params.push(first_param.span);
+        }
+
+        loop {
+            match self.peek()?.kind {
+                TokenKind::RPAREN => {
+                    self.advance();
+                    break;
+                }
+
+                TokenKind::COMMA => {
+                    self.advance();
+                    let param = self.advance()?;
+                    if param.kind != TokenKind::IDENTIFIER {
+                        return Some(Stmt::Unknown(format!("expect identer after ','")));
+                    }
+                    params.push(param.span);
+                }
+
+                _ => {
+                    return Some(Stmt::Unknown(format!("unexpect character")));
+                }
+            }
+        }
+
+        if self.peek()?.kind != TokenKind::LBRACE {
+            return Some(Stmt::Unknown(format!(
+                "function declaration requires \"{{ ... }}\" as body"
+            )));
+        }
+
+        let block = self.parse_stmt()?;
+
+        Some(Stmt::FunDeclStmt {
+            ident: tok.span,
+            params,
+            body: Box::new(block),
+        })
     }
 
     fn parse_stmt(&mut self) -> Option<Stmt> {

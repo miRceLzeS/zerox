@@ -1,19 +1,52 @@
 use crate::{
-    Error, Result,
-    parse::{BinaryOperator, Expr, LiteralValue, Stmt, UnaryOperator, stmt},
+    Error, Result, Span,
+    parse::{BinaryOperator, Expr, LiteralValue, Stmt, UnaryOperator},
 };
 use std::{
     cmp::Ordering,
     collections::HashMap,
     fmt::Display,
     ops::{Add, Div, Mul, Neg, Not, Sub},
+    rc::Rc,
 };
+
+#[derive(Debug)]
+pub struct NativeFunction {
+    func: fn(&mut Interpreter, &[EvalResult]) -> EvalResult,
+}
+
+impl NativeFunction {
+    pub fn new(func: fn(&mut Interpreter, &[EvalResult]) -> EvalResult) -> Self {
+        Self { func }
+    }
+
+    pub fn eval(&self, i: &mut Interpreter, arg_vals: &[EvalResult]) -> EvalResult {
+        (self.func)(i, arg_vals)
+    }
+}
+
+#[derive(Debug)]
+pub struct Function {
+    params: Vec<Span>,
+    body: Rc<Vec<Stmt>>,
+}
+
+impl Function {
+    pub fn new(params: Vec<Span>, body: Vec<Stmt>) -> Self {
+        Self {
+            params,
+            body: Rc::new(body),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum EvalResult {
     Number(f64),
     String(String),
     Bool(bool),
+    NativeFunction(Rc<NativeFunction>),
+    UserFunction(Rc<Function>),
     Nil,
 }
 
@@ -37,6 +70,7 @@ impl Display for EvalResult {
             EvalResult::Number(val) => write!(f, "{}", val),
             EvalResult::String(val) => write!(f, "{}", val),
             EvalResult::Bool(val) => write!(f, "{}", val),
+            EvalResult::UserFunction(_) | EvalResult::NativeFunction(_) => write!(f, "<function>"),
             EvalResult::Nil => write!(f, "nil"),
         }
     }
@@ -182,7 +216,7 @@ impl PartialOrd for EvalResult {
     }
 }
 
-pub type Program = Vec<stmt::Stmt>;
+pub type Program<'s> = &'s [Stmt];
 
 #[derive(Debug)]
 pub struct Env<'i> {
@@ -204,9 +238,25 @@ pub struct Interpreter<'i> {
 
 impl<'i> Interpreter<'i> {
     pub fn new() -> Self {
-        let mut env = Vec::new();
-        env.push(Env::new());
-        Self { env }
+        let mut global = Env::new();
+
+        let clock = NativeFunction::new(|_, _| {
+            use std::time;
+
+            let now = time::SystemTime::now()
+                .duration_since(time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+
+            EvalResult::String(format!("{}", now))
+        });
+        global
+            .vars
+            .insert("clock", EvalResult::NativeFunction(Rc::new(clock)));
+
+        let mut envs = Vec::new();
+        envs.push(global);
+        Self { env: envs }
     }
 
     pub fn interpret(&mut self, source: &'i str, prog: Program) -> crate::Result<()> {
@@ -253,11 +303,9 @@ impl<'i> Interpreter<'i> {
                 } => {
                     if let EvalResult::Bool(b) = self.eval(source, &cond)?.as_bool() {
                         if b {
-                            let then_prog = vec![*then_branch];
-                            self.interpret(source, then_prog)?;
+                            self.interpret(source, &[*then_branch.clone()])?;
                         } else if let Some(else_stmt) = else_branch {
-                            let else_prog = vec![*else_stmt];
-                            self.interpret(source, else_prog)?;
+                            self.interpret(source, &[*else_stmt.clone()])?;
                         }
                     }
                 }
@@ -266,8 +314,23 @@ impl<'i> Interpreter<'i> {
                     while let EvalResult::Bool(b) = self.eval(source, &cond)?.as_bool()
                         && b
                     {
-                        let body_prog = vec![*(body.clone())];
-                        self.interpret(source, body_prog)?;
+                        self.interpret(source, &[*body.clone()])?;
+                    }
+                }
+
+                Stmt::FunDeclStmt {
+                    ident,
+                    params,
+                    body,
+                } => {
+                    let func_body = vec![*body.clone()];
+                    let func = Function::new(params.clone(), func_body);
+
+                    if let Some(env) = self.env.last_mut() {
+                        env.vars.insert(
+                            ident.lexeme(source),
+                            EvalResult::UserFunction(Rc::new(func)),
+                        );
                     }
                 }
 
@@ -293,7 +356,13 @@ impl<'i> Interpreter<'i> {
                 }
 
                 LiteralValue::String(tok_span) => {
-                    Ok(EvalResult::String(format!("{}", tok_span.lexeme(source))))
+                    let raw = tok_span.lexeme(source);
+                    let val = raw
+                        .strip_prefix('"')
+                        .and_then(|s| s.strip_suffix('"'))
+                        .unwrap()
+                        .to_string();
+                    Ok(EvalResult::String(format!("{}", val)))
                 }
 
                 LiteralValue::True => Ok(EvalResult::Bool(true)),
@@ -449,6 +518,62 @@ impl<'i> Interpreter<'i> {
                 }
 
                 Err(Error::RuntimeError(format!("Undefined variable {}.", name)))
+            }
+
+            Expr::Call { callee, args } => {
+                let callee_val = self.eval(source, callee)?;
+                match callee_val {
+                    EvalResult::NativeFunction(nf) => {
+                        let arg_cnt = args.len();
+                        if arg_cnt >= 255 {
+                            return Err(Error::RuntimeError(format!(
+                                "Function can't receive more than 255 arguments."
+                            )));
+                        }
+
+                        let mut arg_vals: Vec<EvalResult> = vec![];
+                        for arg in args {
+                            arg_vals.push(self.eval(source, arg)?);
+                        }
+
+                        Ok(nf.clone().eval(self, &arg_vals))
+                    }
+
+                    EvalResult::UserFunction(func) => {
+                        self.env.push(Env::new());
+
+                        let param_cnt = func.params.len();
+                        let arg_cnt = args.len();
+                        if param_cnt >= 255 || arg_cnt >= 255 {
+                            return Err(Error::RuntimeError(format!(
+                                "Function can't receive more than 255 arguments."
+                            )));
+                        }
+
+                        if arg_cnt != param_cnt {
+                            return Err(Error::RuntimeError(format!(
+                                "Function expect {} arguments, get {}.",
+                                param_cnt, arg_cnt
+                            )));
+                        }
+
+                        for i in 0..param_cnt {
+                            let param_name = func.params[i].lexeme(source);
+                            let arg_val = self.eval(source, &args[i])?;
+                            if let Some(env) = self.env.last_mut() {
+                                env.vars.insert(param_name, arg_val);
+                            }
+                        }
+
+                        self.interpret(source, &func.body.clone())?;
+
+                        self.env.pop();
+
+                        Ok(EvalResult::Nil)
+                    }
+
+                    _ => Err(Error::RuntimeError(format!("Not callable."))),
+                }
             }
         }
     }

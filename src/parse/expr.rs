@@ -92,4 +92,9 @@ pub enum Expr {
         ident: Span,
         expr: Box<Expr>,
     },
+
+    Call {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+    },
 }

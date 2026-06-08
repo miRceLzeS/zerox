@@ -27,5 +27,11 @@ pub enum Stmt {
         body: Box<Stmt>,
     },
 
+    FunDeclStmt {
+        ident: Span,
+        params: Vec<Span>,
+        body: Box<Stmt>,
+    },
+
     Unknown(String),
 }

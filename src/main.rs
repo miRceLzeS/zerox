@@ -58,7 +58,7 @@ fn interpret(source_code: &str) -> Result<()> {
     let prog = p.parse()?;
 
     let mut i = zerox::Interpreter::new();
-    i.interpret(source_code, prog)?;
+    i.interpret(source_code, &prog)?;
 
     Ok(())
 }
