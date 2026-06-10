@@ -40,6 +40,11 @@ impl Function {
     }
 }
 
+#[derive(Debug)]
+pub enum Trap {
+    Return(EvalResult),
+}
+
 #[derive(Debug, Clone)]
 pub enum EvalResult {
     Number(f64),
@@ -259,7 +264,7 @@ impl<'i> Interpreter<'i> {
         Self { env: envs }
     }
 
-    pub fn interpret(&mut self, source: &'i str, prog: Program) -> crate::Result<()> {
+    pub fn interpret(&mut self, source: &'i str, prog: Program) -> crate::Result<Option<Trap>> {
         for statement in prog {
             match statement {
                 Stmt::VarDeclStmt { ident, init_expr } => {
@@ -283,8 +288,12 @@ impl<'i> Interpreter<'i> {
 
                 Stmt::BlockStmt { stmts } => {
                     self.env.push(Env::new());
-                    self.interpret(source, stmts)?;
+                    let trap = self.interpret(source, stmts)?;
                     self.env.pop();
+
+                    if let Some(_) = trap {
+                        return Ok(trap);
+                    }
                 }
 
                 Stmt::ExprStmt(expr) => {
@@ -301,12 +310,17 @@ impl<'i> Interpreter<'i> {
                     then_branch,
                     else_branch,
                 } => {
+                    let mut trap: Option<Trap> = None;
                     if let EvalResult::Bool(b) = self.eval(source, &cond)?.as_bool() {
                         if b {
-                            self.interpret(source, &[*then_branch.clone()])?;
+                            trap = self.interpret(source, &[*then_branch.clone()])?;
                         } else if let Some(else_stmt) = else_branch {
-                            self.interpret(source, &[*else_stmt.clone()])?;
+                            trap = self.interpret(source, &[*else_stmt.clone()])?;
                         }
+                    }
+
+                    if let Some(_) = trap {
+                        return Ok(trap);
                     }
                 }
 
@@ -314,7 +328,10 @@ impl<'i> Interpreter<'i> {
                     while let EvalResult::Bool(b) = self.eval(source, &cond)?.as_bool()
                         && b
                     {
-                        self.interpret(source, &[*body.clone()])?;
+                        let trap = self.interpret(source, &[*body.clone()])?;
+                        if let Some(_) = trap {
+                            return Ok(trap);
+                        }
                     }
                 }
 
@@ -334,11 +351,16 @@ impl<'i> Interpreter<'i> {
                     }
                 }
 
+                Stmt::ReturnStmt(expr) => {
+                    let val = self.eval(source, expr)?;
+                    return Ok(Some(Trap::Return(val)));
+                }
+
                 Stmt::Unknown(msg) => return Err(Error::RuntimeError(format!("{}", msg))),
             }
         }
 
-        Ok(())
+        Ok(None)
     }
 
     pub fn eval(&mut self, source: &'i str, expr: &Expr) -> crate::Result<EvalResult> {
@@ -565,11 +587,15 @@ impl<'i> Interpreter<'i> {
                             }
                         }
 
-                        self.interpret(source, &func.body.clone())?;
+                        let trap = self.interpret(source, &func.body.clone())?;
+                        let mut val = EvalResult::Nil;
+                        if let Some(Trap::Return(return_val)) = trap {
+                            val = return_val;
+                        }
 
                         self.env.pop();
 
-                        Ok(EvalResult::Nil)
+                        Ok(val)
                     }
 
                     _ => Err(Error::RuntimeError(format!("Not callable."))),

@@ -416,13 +416,13 @@ impl Parser {
             }
         }
 
-        if self.peek()?.kind != TokenKind::LBRACE {
+        if self.advance()?.kind != TokenKind::LBRACE {
             return Some(Stmt::Unknown(format!(
                 "function declaration requires \"{{ ... }}\" as body"
             )));
         }
 
-        let block = self.parse_stmt()?;
+        let block = self.parse_block()?;
 
         Some(Stmt::FunDeclStmt {
             ident: tok.span,
@@ -459,6 +459,11 @@ impl Parser {
                 self.parse_for_stmt()
             }
 
+            TokenKind::RETURN => {
+                self.advance();
+                self.parse_return_stmt()
+            }
+
             _ => self.parse_expression_stmt(),
         }
     }
@@ -486,10 +491,12 @@ impl Parser {
 
     fn parse_expression_stmt(&mut self) -> Option<Stmt> {
         let expr = self.parse_expression()?;
-        match self.advance()?.kind {
-            TokenKind::SEMICOLON => Some(Stmt::ExprStmt(expr)),
-            _ => Some(Stmt::Unknown(format!("expect ';' after expression"))),
+
+        if self.advance()?.kind != TokenKind::SEMICOLON {
+            return Some(Stmt::Unknown(format!("expect ';' after return expression")));
         }
+
+        Some(Stmt::ExprStmt(expr))
     }
 
     fn parse_if_stmt(&mut self) -> Option<Stmt> {
@@ -635,6 +642,22 @@ impl Parser {
         }
 
         Some(body)
+    }
+
+    fn parse_return_stmt(&mut self) -> Option<Stmt> {
+        let mut expr = Expr::Literal {
+            value: LiteralValue::Nil,
+        };
+
+        if let Some(return_expr) = self.parse_expression() {
+            expr = return_expr;
+        }
+
+        if self.advance()?.kind != TokenKind::SEMICOLON {
+            return Some(Stmt::Unknown(format!("expect ';' after return value")));
+        }
+
+        Some(Stmt::ReturnStmt(expr))
     }
 
     fn advance(&mut self) -> Option<Token> {

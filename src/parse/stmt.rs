@@ -33,5 +33,7 @@ pub enum Stmt {
         body: Box<Stmt>,
     },
 
+    ReturnStmt(Expr),
+
     Unknown(String),
 }

@@ -119,11 +119,17 @@ impl<'s> Lexer<'s> {
                 )),
 
                 "/" => {
-                    tokens.push(Token::new(
+                    let tok = Token::new(
                         self.either(TokenKind::COMMENT, TokenKind::SLASH),
                         (start, self.current),
                         self.line,
-                    ));
+                    );
+
+                    if tok.kind == TokenKind::COMMENT {
+                        continue;
+                    }
+
+                    tokens.push(tok);
                 }
 
                 "=" => {
