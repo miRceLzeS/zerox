@@ -3,12 +3,28 @@ use crate::{
     parse::{BinaryOperator, Expr, LiteralValue, Stmt, UnaryOperator},
 };
 use std::{
+    cell::RefCell,
     cmp::Ordering,
     collections::HashMap,
     fmt::Display,
     ops::{Add, Div, Mul, Neg, Not, Sub},
     rc::Rc,
 };
+
+#[derive(Debug, Clone)]
+pub struct Env {
+    vars: HashMap<String, EvalResult>,
+}
+
+impl Env {
+    pub fn new() -> Self {
+        Self {
+            vars: HashMap::new(),
+        }
+    }
+}
+
+type EnvRef = Rc<RefCell<Env>>;
 
 #[derive(Debug)]
 pub struct NativeFunction {
@@ -29,13 +45,15 @@ impl NativeFunction {
 pub struct Function {
     params: Vec<Span>,
     body: Rc<Vec<Stmt>>,
+    env: EnvRef,
 }
 
 impl Function {
-    pub fn new(params: Vec<Span>, body: Vec<Stmt>) -> Self {
+    pub fn new(params: Vec<Span>, body: Vec<Stmt>, env: EnvRef) -> Self {
         Self {
             params,
             body: Rc::new(body),
+            env,
         }
     }
 }
@@ -224,24 +242,12 @@ impl PartialOrd for EvalResult {
 pub type Program<'s> = &'s [Stmt];
 
 #[derive(Debug)]
-pub struct Env<'i> {
-    vars: HashMap<&'i str, EvalResult>,
+pub struct Interpreter {
+    envs: Vec<Env>,
+    capture: Option<EnvRef>,
 }
 
-impl<'i> Env<'i> {
-    pub fn new() -> Self {
-        Self {
-            vars: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Interpreter<'i> {
-    env: Vec<Env<'i>>,
-}
-
-impl<'i> Interpreter<'i> {
+impl Interpreter {
     pub fn new() -> Self {
         let mut global = Env::new();
 
@@ -255,41 +261,42 @@ impl<'i> Interpreter<'i> {
 
             EvalResult::String(format!("{}", now))
         });
-        global
-            .vars
-            .insert("clock", EvalResult::NativeFunction(Rc::new(clock)));
+        global.vars.insert(
+            "clock".to_string(),
+            EvalResult::NativeFunction(Rc::new(clock)),
+        );
 
         let mut envs = Vec::new();
         envs.push(global);
-        Self { env: envs }
+        Self {
+            envs,
+            capture: None,
+        }
     }
 
-    pub fn interpret(&mut self, source: &'i str, prog: Program) -> crate::Result<Option<Trap>> {
+    pub fn interpret(&mut self, source: &str, prog: Program) -> crate::Result<Option<Trap>> {
         for statement in prog {
             match statement {
                 Stmt::VarDeclStmt { ident, init_expr } => {
                     let name = ident.lexeme(source);
                     if name != "" {
-                        if let Some(env) = self.env.last_mut() {
-                            env.vars.insert(name, EvalResult::Nil);
+                        if let Some(env) = self.envs.last_mut() {
+                            env.vars.insert(name.to_string(), EvalResult::Nil);
                         }
                     }
 
-                    match init_expr {
-                        Some(expr) => {
-                            let val = self.eval(source, &expr)?;
-                            if let Some(env) = self.env.last_mut() {
-                                env.vars.insert(name, val);
-                            }
+                    if let Some(expr) = init_expr {
+                        let val = self.eval(source, &expr)?;
+                        if let Some(env) = self.envs.last_mut() {
+                            env.vars.insert(name.to_string(), val);
                         }
-                        None => {}
                     }
                 }
 
                 Stmt::BlockStmt { stmts } => {
-                    self.env.push(Env::new());
+                    self.envs.push(Env::new());
                     let trap = self.interpret(source, stmts)?;
-                    self.env.pop();
+                    self.envs.pop();
 
                     if let Some(_) = trap {
                         return Ok(trap);
@@ -341,11 +348,12 @@ impl<'i> Interpreter<'i> {
                     body,
                 } => {
                     let func_body = vec![*body.clone()];
-                    let func = Function::new(params.clone(), func_body);
+                    let env = self.envs.last().cloned().unwrap();
+                    let func = Function::new(params.clone(), func_body, Rc::new(RefCell::new(env)));
 
-                    if let Some(env) = self.env.last_mut() {
+                    if let Some(env) = self.envs.last_mut() {
                         env.vars.insert(
-                            ident.lexeme(source),
+                            ident.lexeme(source).to_string(),
                             EvalResult::UserFunction(Rc::new(func)),
                         );
                     }
@@ -363,7 +371,7 @@ impl<'i> Interpreter<'i> {
         Ok(None)
     }
 
-    pub fn eval(&mut self, source: &'i str, expr: &Expr) -> crate::Result<EvalResult> {
+    pub fn eval(&mut self, source: &str, expr: &Expr) -> crate::Result<EvalResult> {
         match expr {
             Expr::Literal { value } => match value {
                 LiteralValue::Number(tok_span) => {
@@ -519,8 +527,14 @@ impl<'i> Interpreter<'i> {
 
             Expr::Variable { ident } => {
                 let name = ident.lexeme(source);
-                for env in self.env.iter().rev() {
+                for env in self.envs.iter().rev() {
                     if let Some(val) = env.vars.get(name) {
+                        return Ok(val.clone());
+                    }
+                }
+
+                if let Some(env) = &self.capture {
+                    if let Some(val) = env.borrow().vars.get(name) {
                         return Ok(val.clone());
                     }
                 }
@@ -532,11 +546,16 @@ impl<'i> Interpreter<'i> {
                 let name = ident.lexeme(source);
                 let new_val = self.eval(source, expr)?;
 
-                for env in self.env.iter_mut() {
+                for env in self.envs.iter_mut() {
                     if let Some(_) = env.vars.get(name) {
-                        env.vars.insert(name, new_val);
+                        env.vars.insert(name.to_string(), new_val);
                         return Ok(EvalResult::Nil);
                     }
+                }
+
+                if let Some(env) = &self.capture {
+                    env.borrow_mut().vars.insert(name.to_string(), new_val);
+                    return Ok(EvalResult::Nil);
                 }
 
                 Err(Error::RuntimeError(format!("Undefined variable {}.", name)))
@@ -562,7 +581,8 @@ impl<'i> Interpreter<'i> {
                     }
 
                     EvalResult::UserFunction(func) => {
-                        self.env.push(Env::new());
+                        self.envs.push(Env::new());
+                        self.capture = Some(Rc::clone(&func.env));
 
                         let param_cnt = func.params.len();
                         let arg_cnt = args.len();
@@ -582,8 +602,13 @@ impl<'i> Interpreter<'i> {
                         for i in 0..param_cnt {
                             let param_name = func.params[i].lexeme(source);
                             let arg_val = self.eval(source, &args[i])?;
-                            if let Some(env) = self.env.last_mut() {
-                                env.vars.insert(param_name, arg_val);
+
+                            if let Some(env) = self.envs.last_mut() {
+                                env.vars.insert(param_name.to_string(), arg_val);
+                            } else if let Some(env) = &self.capture {
+                                env.borrow_mut()
+                                    .vars
+                                    .insert(param_name.to_string(), arg_val);
                             }
                         }
 
@@ -593,7 +618,8 @@ impl<'i> Interpreter<'i> {
                             val = return_val;
                         }
 
-                        self.env.pop();
+                        self.envs.pop();
+                        self.capture = None;
 
                         Ok(val)
                     }
