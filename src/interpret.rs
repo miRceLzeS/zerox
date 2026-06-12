@@ -605,10 +605,6 @@ impl Interpreter {
 
                             if let Some(env) = self.envs.last_mut() {
                                 env.vars.insert(param_name.to_string(), arg_val);
-                            } else if let Some(env) = &self.capture {
-                                env.borrow_mut()
-                                    .vars
-                                    .insert(param_name.to_string(), arg_val);
                             }
                         }
 
